@@ -1,0 +1,33 @@
+canvas {
+  position: absolute;
+  top: 100px;
+  left: 100px;
+  background: transparent;
+  border: 1px solid darkgray;
+}
+#background{
+  z-index:-2;
+}
+#foreground{
+  z-index: -1;
+}
+#mcground{
+  z-index: 0;
+}
+body{
+  background-color: black;
+}
+h2{
+  color: white;
+  position: absolute;
+  top: 10px;
+  left: 255px;
+}
+#scoreDisplay{
+  color: white;
+  position: absolute;
+  top: 65px;
+  left: 110px;
+  font-size: 10pt;
+  font-family: sans-serif;
+}
