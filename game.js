@@ -1,6 +1,8 @@
 var frameCount = 0,
-  frameIndex = 0;
-
+  frameIndex = 0,
+  score = 0,
+  gameOver = false,
+  won = false;//Various global variables that probably shouldn't exist.
 
 // The keycodes that will be mapped when a user presses a button.
 // Original code by Doug McInnes
@@ -49,8 +51,8 @@ document.onkeyup = function(e) {
 }
 
 
-var imageRepository = new function() {
-  // Define images
+var imageRepository = new function() { //store images here so we don't have to load files multiple times
+
   this.background = new Image();
   this.emcee = new Image();
   this.glob = new Image();
@@ -81,7 +83,7 @@ var imageRepository = new function() {
     imageLoad();
   }
 
-  // Set images src
+  // Set image sources
   this.background.src = "imgs/bg.png";
   this.emcee.src = "imgs/MCss2.png";
   this.glob.src = "imgs/Globss.png"
@@ -91,7 +93,7 @@ var imageRepository = new function() {
 
 }
 
-function Drawable() {
+function Drawable() { //prototype object for anything we end up throwing on the canvas, provides useful tools.
   this.init = function(x, y, width, height) {
     this.x = x;
     this.y = y;
@@ -104,7 +106,7 @@ function Drawable() {
   this.draw = function() {};
 }
 
-function Background() {
+function Background() { //scrolling background
   this.speed = 1;
   this.draw = function() {
     this.y += this.speed;
@@ -118,25 +120,23 @@ function Background() {
 Background.prototype = new Drawable();
 
 /**
- * Custom Pool object. Holds Bullet objects to be managed to prevent
- * garbage collection.
+ * Custom Pool object. Holds projectives, enemies, whatever we want. Used to prevent garbage collection.
  */
 function Pool(maxSize) {
-  var size = maxSize; // Max bullets allowed in the pool
+  var size = maxSize; // Max bullets objects in the pool
   var pool = [];
   /*
-   * Populates the pool array with Bullet objects
+   * Populates the pool array with various objects
    */
   this.init = function(object) {
-    if (object != "urchin") {
+    if (object != "urchin") {   //messy code used to customize our pool based on what we want
       for (var i = 0; i < size; i++) {
-        // Initalize the bullet object
         var glob = new Glob(object);
         if (object.includes("spiker")) {
-          glob.init(0, 0, imageRepository.spike.width / 4,
+          glob.init(-200, -200, imageRepository.spike.width / 4,
             imageRepository.spike.height);
         } else {
-          glob.init(0, 0, imageRepository.glob.width / 5,
+          glob.init(1000, 1000, imageRepository.glob.width / 5,
             imageRepository.glob.height);
         }
         pool[i] = glob;
@@ -144,7 +144,7 @@ function Pool(maxSize) {
     } else { //isUrchin
       for (var i = 0; i < size; i++) {
         var urchin = new Urchin();
-        urchin.init(0, 0, imageRepository.urchin.width / 4, imageRepository.urchin.height);
+        urchin.init(-200, -200, imageRepository.urchin.width / 4, imageRepository.urchin.height);
         pool[i] = urchin;
       }
     }
@@ -152,10 +152,7 @@ function Pool(maxSize) {
 
 
   };
-  /*
-   * Grabs the last item in the list and initializes it and
-   * pushes it to the front of the array.
-   */
+  // pulls the last item in our pool & initializes it
 
   this.get = function(x, y, speed) {
 
@@ -164,21 +161,16 @@ function Pool(maxSize) {
       pool.unshift(pool.pop());
     }
   };
-  /*
-   * Used for the ship to be able to get two bullets at once. If
-   * only the get() function is used twice, the ship is able to
-   * fire and only have 1 bullet spawn instead of 2.
-   */
+
+  //A function that probably shouldn't exist, made as a workaround because of bugs I was getting
   this.grabAll = function() {
     return pool;
   };
-  /*
-   * Draws any in use Bullets. If a bullet goes off the screen,
-   * clears it and pushes it to the front of the array.
-   */
+
+  //Draws our stuff. Clears away off-screen objects
   this.animate = function() {
     for (var i = 0; i < size; i++) {
-      // Only draw until we find a bullet that is not alive
+      // Draw until we find a dead object.
       if (pool[i].alive) {
         if (pool[i].draw()) {
           pool[i].clear();
@@ -191,12 +183,12 @@ function Pool(maxSize) {
 }
 
 function Glob(object) {
-  this.alive = false; // Is true if the bullet is currently in use
+  this.alive = false; // Is true if projectile is in use.
   this.image = imageRepository.glob;
   var me = object;
-  /*
-   * Sets the bullet values
-   */
+  this.itsAHit = false;
+
+
   this.spawn = function(x, y, speed) {
     this.x = x;
     this.y = y;
@@ -208,9 +200,15 @@ function Glob(object) {
    * Returns true if the bullet moved off the screen, indicating that
    * the bullet is ready to be cleared by the pool, otherwise draws
    * the bullet.
+   *      In hindsight, I regret using the dirty rectangle method.
+   *      My game design choices made this a bad fit and I'm not sure how efficient it is.
+   *      Incoming VERY messy code.
    */
   this.draw = function() {
     this.context.clearRect(this.x, this.y, this.width, this.height); //Dirty rectangle
+    if (this.itsAHit) {
+      this.clear();
+    }
     if (me === "globster") {
       this.y -= this.speed;
       if (this.y <= 0 - this.height) {
@@ -252,14 +250,13 @@ function Glob(object) {
       }
     }
   };
-  /*
-   * Resets the bullet values
-   */
+
   this.clear = function() {
-    this.x = 0;
-    this.y = 0;
+    this.x = 1000;
+    this.y = 2000;
     this.speed = 0;
     this.alive = false;
+    itsAHit = false;
   };
 }
 Glob.prototype = new Drawable();
@@ -272,7 +269,6 @@ function Emcee() {
   var pewRate = 15;
   var counter = 0;
   this.draw = function() {
-    //console.log(this.context);
     this.context.drawImage(this.image, frameIndex * this.width / 4, 0, this.width / 4, this.height, this.x, this.y, this.width / 4, this.height);
   };
   this.move = function() {
@@ -280,38 +276,39 @@ function Emcee() {
     // Determine if the action is move action
     if (KEY_STATUS.left || KEY_STATUS.right ||
       KEY_STATUS.down || KEY_STATUS.up) {
-      // The ship moved, so erase it's current image so it can
-      // be redrawn in it's new location
+      //Dirty rectangle!! Time to move our Globby guy
       this.context.clearRect(this.x, this.y, this.width, this.height);
       // Update x and y according to the direction to move and
-      // redraw the ship. Change the else if's to if statements
-      // to have diagonal movement.
-      if (KEY_STATUS.left) {
-        this.x -= this.speed
-        if (this.x <= 0) // Keep player within the screen
-          this.x = 0;
-      }
-      if (KEY_STATUS.right) {
-        this.x += this.speed
-        if (this.x >= this.canvasWidth - this.width / 5) {
-
-          this.x = this.canvasWidth - this.width / 5;
+      // redraw the ship. Allows multiple inputs for diagonal movement.
+      if (!gameOver) {
+        if (KEY_STATUS.left) {
+          this.x -= this.speed
+          if (this.x <= 0) // Keep player within the screen
+            this.x = 0;
         }
+        if (KEY_STATUS.right) {
+          this.x += this.speed
+          if (this.x >= this.canvasWidth - this.width / 5) {
+
+            this.x = this.canvasWidth - this.width / 5;
+          }
+        }
+        if (KEY_STATUS.up) {
+          this.y -= this.speed * .8;
+          if (this.y <= this.canvasHeight / 8 * 1)
+            this.y = this.canvasHeight / 8 * 1;
+        }
+        if (KEY_STATUS.down) {
+          this.y += this.speed * .8;
+          if (this.y >= this.canvasHeight - this.height)
+            this.y = this.canvasHeight - this.height;
+        }
+        // Finish by redrawing the ship
+        this.draw();
       }
-      if (KEY_STATUS.up) {
-        this.y -= this.speed * .8;
-        if (this.y <= this.canvasHeight / 8 * 1)
-          this.y = this.canvasHeight / 8 * 1;
-      }
-      if (KEY_STATUS.down) {
-        this.y += this.speed * .8;
-        if (this.y >= this.canvasHeight - this.height)
-          this.y = this.canvasHeight - this.height;
-      }
-      // Finish by redrawing the ship
-      this.draw();
+
     }
-    if (KEY_STATUS.space && counter >= pewRate) {
+    if (KEY_STATUS.space && counter >= pewRate && !gameOver) {
       this.pew();
       counter = 0;
     }
@@ -332,6 +329,7 @@ function Urchin() {
   var percentFire = .01;
   var chance = 0;
   this.alive = false;
+  this.itsAHit = false;
   /*
    * Sets the Enemy values
    */
@@ -339,39 +337,48 @@ function Urchin() {
     this.x = x;
     this.y = y;
     this.speed = speed;
-    this.speedX = 0;
+    this.speedX = 1.5;
     this.speedY = speed;
     this.alive = true;
-    this.leftEdge = this.x - 90;
-    this.rightEdge = this.x + 90;
-    this.bottomEdge = this.y + 140;
+    this.leftEdge = 20;
+    this.rightEdge = this.canvasWidth - 50;
+    this.bottomEdge = this.canvasHeight / 2;
+    this.topEdge = 0;
   };
   /*
    * Move the enemy
    */
   this.draw = function() {
-    this.context.clearRect(this.x - 1, this.y, this.width + 1, this.height);
-    this.x += this.speedX;
-    this.y += this.speedY;
-    if (this.x <= this.leftEdge) {
-      this.speedX = this.speed;
-    } else if (this.x >= this.rightEdge + this.width) {
-      this.speedX = -this.speed;
-    } else if (this.y >= this.bottomEdge) {
-      this.speed = 1.5;
-      this.speedY = 0;
-      this.y -= 5;
-      this.speedX = -this.speed;
-    }
-    this.context.drawImage(imageRepository.urchin, frameIndex * this.width, 0, this.width, this.height, this.x, this.y, this.width, this.height);
-    // Enemy has a chance to shoot every movement
-    chance = Math.floor(Math.random() * 101);
-    if (chance / 100 < percentFire) {
-      this.fire();
+    if (!this.itsAHit) {
+
+      this.context.clearRect(this.x - 1, this.y, this.width + 1, this.height);
+      this.x += this.speedX;
+      this.y += this.speedY;
+      randSpd = Math.random() * 2;
+      this.speed = randSpd;
+      if (this.x <= this.leftEdge)
+        this.speedX = this.speed;
+      if (this.x >= this.rightEdge)
+        this.speedX = -this.speed;
+      if (this.y >= this.bottomEdge) {
+        this.speedY = -this.speed;
+      }
+      if (this.y <= this.topEdge) {
+        this.speedY = this.speed;
+
+      }
+
+      this.context.drawImage(imageRepository.urchin, frameIndex * this.width, 0, this.width, this.height, this.x, this.y, this.width, this.height);
+
+      // Enemy has a chance to shoot
+      chance = Math.floor(Math.random() * 101);
+      if (chance / 100 < percentFire || !frameCount % 250) {
+        this.fire();
+      }
     }
   };
   /*
-   * Fires a bullet
+   * Shoots out 4 sick spikes. This particular part of code makes decent use of our pool object.
    */
   this.fire = function() {
     game.spikeOnePool.get(this.x + this.width, this.y, 1.5);
@@ -383,15 +390,18 @@ function Urchin() {
 
   }
   /*
-   * Resets the enemy values
+   * Resets the urchins values
    */
   this.clear = function() {
-    this.x = 0;
-    this.y = 0;
+    this.context.clearRect(this.x - 1, this.y, this.width + 1, this.height);
+
+    this.x = -200;
+    this.y = -200;
     this.speed = 0;
     this.speedX = 0;
     this.speedY = 0;
     this.alive = false;
+
   };
 }
 Urchin.prototype = new Drawable();
@@ -399,7 +409,7 @@ Urchin.prototype = new Drawable();
 
 
 
-function Game() {
+function Game() { //Our Game holds all of our important stuff and initializes/starts the whole she-bang.
   this.init = function() {
     this.bgCanvas = document.getElementById('background');
     this.bgContext = this.bgCanvas.getContext('2d');
@@ -427,13 +437,14 @@ function Game() {
     this.emcee = new Emcee();
     this.emcee.init(230, 400, imageRepository.emcee.width, imageRepository.emcee.height);
 
+
+    //Code to spawn our wave of enemies. Tried to work on multiple waves of enemies, but couldn't quite figure it out.
     this.urchinPool = new Pool(30);
     this.urchinPool.init("urchin");
     var height = imageRepository.urchin.height;
     var width = imageRepository.urchin.width / 4;
     var x = 100;
     var y = -height;
-    //this.urchinPool.get(200, 80, 1);
     var spacer = y * 1.5;
     for (var i = 1; i <= 18; i++) {
       this.urchinPool.get(x, y, 2);
@@ -462,8 +473,8 @@ function Game() {
 }
 
 function animate() {
-  frameCount += 1;
-  if (frameCount % 15 === 0) {
+  frameCount += 1;  //Limited myself to 4 animation frames per animated object to reduce complexity.
+  if (frameCount % 15 === 0) { //switches sprites every 15 frames.
     frameIndex += 1;
     if (frameIndex === 4) {
       frameIndex = 0;
@@ -479,31 +490,76 @@ function animate() {
   game.spikeTwoPool.animate();
   game.spikeThreePool.animate();
   game.spikeFourPool.animate();
-  checkAllCollisions();
-
-}
-
-function checkAllCollisions() {
-  console.log(game.urchinPool);
-  //var urchinCount = game.urchinPool.pool.length;
-  //game.emcee.globPool.pool.forEach(checkForGlobHit(element, urchinCount));
-}
-
-function checkForGlobHit(glob, uC) {
-  for (var i = 0; i < uC; i++) {
-    if (tempUrch = game.urchinPool.pool[i]) {
-      if (glob.x < tempUrch.x + tempUrch.width && glob.x + glob.width > tempUrch.x &&
-        glob.y < tempUrch.y + tempUrch.height && glob.y + glob.height > tempUrch.y) {
-        game.urchinPool.pool[i].clear();
-        glob.clear();
-      }
-    }
+  if (!gameOver && !won) { //doesn't continue to run collision checks after we win/lose.
+    checkAllCollisions();
   }
 }
 
+function checkAllCollisions() {
+  var urchins = game.urchinPool.grabAll();
+  var myglobs = game.emcee.globPool.grabAll();
+  var spikes1 = game.spikeOnePool.grabAll();
+  var spikes2 = game.spikeTwoPool.grabAll();
+  var spikes3 = game.spikeThreePool.grabAll();
+  var spikes4 = game.spikeFourPool.grabAll();
+  var allSpikes = spikes1.concat(spikes2, spikes3, spikes4);
+  if (frameCount % 2 === 0) {
+    checkForDestruction(myglobs, urchins, "points");
+    checkForDestruction(allSpikes, game.emcee, "You Died");
+  }
+}
+
+function checkForDestruction(objA, objB, outcome) {
 
 
+  for (var i = 0; i < objA.length; i++) {
+    if (outcome != "You Died") {
+      for (var j = 0; j < objB.length; j++) {
 
+        if (objA[i].x < objB[j].x + objB[j].width && objA[i].x + objA[i].width > objB[j].x &&
+          objA[i].y < objB[j].y + objB[j].height && objA[i].y + objA[i].height > objB[j].y) {
+          if (objB[j].itsAHit || objA[i].itsAHit) {
+            return true;
+          }
+          objA[i].itsAHit = true;
+          objB[j].itsAHit = true;
+          if (outcome === "points") {
+            score += 100;
+            if (score === 1800) {
+              updateText("You WIN! Score: " + score);
+              won = true;
+            } else {
+              updateText("Score: " + score);
+            }
+          }
+
+        }
+
+      }
+    } else {
+      if (objA[i].x < objB.x + 10 + objB.width / 7 && objA[i].x + objA[i].width > objB.x + 10 &&
+        objA[i].y < objB.y + objB.height * .7 && objA[i].y + objA[i].height > objB.y) {
+        console.log("boofed: " + objA[i].x + ", " + objA[i].y + "; me: " + objB.x + ", " + objB.y);
+        console.log("objaW: " + objA[i].width + "; objBW: " + objB.width);
+        gameOver = true;
+        updateText("GAME OVER! Score: " + score);
+      }
+
+    }
+  }
+
+}
+
+function updateText(text) {
+  console.log("update with this: " + text);
+  var mcvas = document.getElementById('mcground');
+  var mctext = mcvas.getContext('2d');
+  mctext.clearRect(0, 0, mcvas.width, 30);
+  mctext.font = "10pt Arial";
+  mctext.fillStyle = "red";
+  mctext.fillText(text, 10, 20);
+
+}
 /**
  * requestAnim shim layer by Paul Irish
  * Finds the first API that works to optimize the animation loop,
